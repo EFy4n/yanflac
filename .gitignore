@@ -1,0 +1,7 @@
+/target
+*.flac
+*.mp3
+*.ogg
+*.wav
+*~
+*.swp
