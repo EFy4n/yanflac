@@ -1,9 +1,13 @@
 use std::env;
+use std::error::Error;
+use std::fs::File;
+use std::io::BufReader;
 use std::process;
 
 use lofty::prelude::*;
 use lofty::probe::Probe;
 use lofty::tag::ItemKey;
+use rodio::{Decoder, OutputStream, Sink};
 
 fn main(){
     // get path from command line
@@ -52,6 +56,15 @@ fn main(){
     show("title: ", tag.title().as_deref());
     show("track: ", Some(track.as_str()));
     show("length: ", Some(length.as_str()));
+
+    // play the song
+    println!();
+    println!("playing... press ctrl + c to stop");
+
+    if let Err(e) = play(&path){
+        eprintln!("could not play '{}': {}", path, e);
+        process::exit(1);
+    }
 }
 
 // print one line or "unknown" if value missing
@@ -59,10 +72,15 @@ fn show(label: &str, value: Option<&str>){
     println!("{:<14}{}", label, value.unwrap_or("unknown"));
 }
 
+// plays audio file until it ends
+fn play(path: &str) -> Result<(), Box<dyn Error>>{
+    let(_stream, stream_handle) = OutputStream::try_default()?;
+    let sink = Sink::try_new(&stream_handle)?;
+    let file = File::open(path)?;
+    let source = Decoder::new(BufReader::new(file))?;
 
+    sink.append(source);
+    sink.sleep_until_end();
 
-
-
-
-
-
+    Ok(())
+}

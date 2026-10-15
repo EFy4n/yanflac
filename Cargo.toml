@@ -5,3 +5,4 @@ edition = "2024"
 
 [dependencies]
 lofty = "0.22"
+rodio = "0.20"
