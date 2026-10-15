@@ -4,3 +4,7 @@ shows tags, no GUI needed.
 (ongoing project)
 
 features:
+
+build with:
+- lofty: tag reading
+- rodio: audio playback
