@@ -4,5 +4,6 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+crossterm = "0.28"
 lofty = "0.22"
-rodio = "0.20"
+rodio = {version = "0.20", default-features = false, features = ["symphonia-all"]}
