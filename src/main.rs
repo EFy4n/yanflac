@@ -62,7 +62,7 @@ fn main(){
 
     // play the song
     println!();
-    println!("space: pause   +/-: volume   q: quit");
+    println!("space: pause  +/-: volume  #sh #sl #mh #ml: seek  esc: cancel  q: quit");
     println!();
 
     let result = play(&path, duration);
@@ -95,6 +95,7 @@ fn play(path: &str, total: Duration) -> Result<(), Box<dyn Error>>{
     sink.append(source);
     
     let _raw = RawMode::enable()?;
+    let mut pending = Pending::Empty;
 
     loop{
         // react to a key, if one is pressed
@@ -102,6 +103,7 @@ fn play(path: &str, total: Duration) -> Result<(), Box<dyn Error>>{
             if let Event::Key(key) = event::read()?{
                 if key.kind == KeyEventKind::Press{
                     match key.code{
+                        KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => break,
                         KeyCode::Char(' ') =>{
                             if sink.is_paused(){
                                 sink.play();
@@ -119,7 +121,14 @@ fn play(path: &str, total: Duration) -> Result<(), Box<dyn Error>>{
                             sink.set_volume(volume);
                         }
                         KeyCode::Char('q') => break,
-                        KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => break,
+                        KeyCode::Esc => pending = Pending::Empty,
+                        KeyCode::Char('c') => {
+                            if let Some(action) = handle_char(&mut pending, c){
+                                match action{
+                                    Action::SeekBy(seconds) => seek_by(&sink, seconds, total),
+                                }                            
+                            }
+                        }
                         _ => {}
                     }
                 }
@@ -143,6 +152,94 @@ fn play(path: &str, total: Duration) -> Result<(), Box<dyn Error>>{
     }
     Ok(())
 }
+
+// command parser
+// the unit of seek command
+#[derive(Clone, Copy)]
+enum Unit{
+    Seconds,
+    Minutes,
+}
+
+impl Unit{
+    // how many seconds one of this unit is
+    fn seconds(self) -> i64{
+        match self{
+            Unit::Seconds => 1,
+            Unit::Minutes => 60,
+        }
+    }
+    fn letter(self) -> &'static str{
+        match self{
+            Unit::Seconds => "s",
+            Unit::Minutes => "m",
+        }
+    }
+}
+
+// what has been typed so far
+#[derive(Clone, Copy)]
+enum Pending{
+    Empty,                       // nothing typed
+    Count(64),                   // a number like '12'
+    WithUnit(Option<u64>, Unit), // maybe a number, then s or m, example: '12s' or '12m'
+}
+
+impl Pending{
+    // the text shown in the status line (corner), like in vim
+    fn display(self) -> String{
+        match self{
+            Pending::Empty => String::new(),
+            Pending::Count(n) => n.to_string(),
+            Pending::WithUnit(Some(n), unit) => format!("{}{}", n, unit.letter()),
+            Pending::WithUnit(None, unit) => unit.letter().to_string(),
+        }
+    }
+}
+
+// a finished command that is ready to run
+enum Action{
+    SeekBy(i64), // seconds (negative means back)
+}
+
+/* 
+ * feeds one typed character into the parser
+ * returns an 'Action' when a command is complete
+ */
+fn handle_char(pending: &num Pending, c: char) -> Option<Action>{
+    let(next, action) = match(*pending, c)
+        // digits build up the count
+        (Pending::Empty, '0'..='9') => {
+            let digit = c.to_digit(10).unwrap() as u64;
+            (Pending::Count(digit), None)
+        }
+        (Pending::Count(n), '0'..='9') => {
+            let digit = c.to_digit(10).unwrap() as u64;
+            (Pending::Count((n * 10 + digit).min(99_999)), None)
+        }
+
+        // s or m picks the unit
+        (Pending::Empty, 's') => (Pending::WithUnit(None, Unit::Seconds), None),
+        (Pending::Empty, 'm') => (Pending::WithUnit(None, Unit::Minutes), None),
+
+        (Pending::Count(n), 's') => (Pending::WithUnit(Some(n), Unit::Seconds), None),
+        (Pending::Count(n), 'm') => (Pending::WithUnit(Some(n), Unit::Minutes), None),
+
+        // h or l after a unit finishes the command
+        (Pending::WithUnit(count, unit), 'h' | 'l') => {
+            let seconds = count.unwrap_or(1) as i64 * unit.seconds();
+            let offset = if == 'h' (-seconds) else {seconds};
+            (Pending::Empty, Some(Action::Seekby(offset)))
+        }
+
+        // anything else cancels
+        _ => (Pending::Empty, None).
+    };
+    *pending = next;
+    action
+}
+
+
 
 // turns raw mode on, and back off automatically when dropped
 struct RawMode;
