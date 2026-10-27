@@ -203,9 +203,9 @@ enum Action{
 }
 
 /* 
- * feeds one typed character into the parser
- * returns an 'Action' when a command is complete
- */
+*  feeds one typed character into the parser
+*  returns an 'Action' when a command is complete
+*/
 fn handle_char(pending: &num Pending, c: char) -> Option<Action>{
     let(next, action) = match(*pending, c)
         // digits build up the count
@@ -239,7 +239,15 @@ fn handle_char(pending: &num Pending, c: char) -> Option<Action>{
     action
 }
 
+// jumps forward or back, staying inside the song
+fn seek_by(sink: &sink, offset: i64, total: Duration){
+    let current = sink.get_pos().as_secs() as i64;
+    let last = total.as_secs().saturating_sub(1) as i64;
+    let target = (current + offset).clamp(0, last);
 
+    // failed seek not worth stop the music, ignore it
+    let _ = sink.try_seek(Duration::from_secs(target as u64));
+}
 
 // turns raw mode on, and back off automatically when dropped
 struct RawMode;
